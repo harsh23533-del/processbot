@@ -1,6 +1,6 @@
 services:
   - type: web
-    name: bestfriend-chatbot
+    name: sakshi-chatbot
     env: python
     plan: free
     buildCommand: pip install -r requirements.txt
@@ -10,3 +10,9 @@ services:
         sync: false
       - key: OPENROUTER_MODEL
         value: anthropic/claude-sonnet-4.5
+      - key: DB_PATH
+        value: /var/data/chatbot.db
+    disk:
+      name: chatbot-data
+      mountPath: /var/data
+      sizeGB: 1

@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Bestfriend Chatbot</title>
+<title>Sakshi</title>
 <style>
   * { box-sizing: border-box; }
   body {
@@ -15,13 +15,59 @@
     flex-direction: column;
   }
   header {
-    background: #4A90D9;
+    background: #d94a90;
     color: white;
     padding: 16px;
     text-align: center;
     font-weight: 600;
     font-size: 18px;
   }
+
+  /* ---- Auth screen ---- */
+  #authScreen {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+    padding: 24px;
+  }
+  #authScreen input {
+    width: 100%;
+    max-width: 320px;
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 1px solid #ccc;
+    font-size: 15px;
+    outline: none;
+  }
+  #authScreen button {
+    width: 100%;
+    max-width: 320px;
+    background: #d94a90;
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 12px;
+    font-size: 15px;
+    cursor: pointer;
+  }
+  #authToggle {
+    background: none;
+    color: #d94a90;
+    max-width: none;
+    width: auto;
+    padding: 4px;
+  }
+  #authError {
+    color: #c0392b;
+    font-size: 13px;
+    min-height: 18px;
+  }
+
+  /* ---- Chat screen ---- */
+  #chatScreen { display: none; flex: 1; flex-direction: column; min-height: 0; }
   #chat {
     flex: 1;
     overflow-y: auto;
@@ -38,21 +84,9 @@
     font-size: 15px;
     white-space: pre-wrap;
   }
-  .user {
-    align-self: flex-end;
-    background: #DCF8C6;
-  }
-  .bot {
-    align-self: flex-start;
-    background: #ffffff;
-    border: 1px solid #e5e5e5;
-  }
-  .typing {
-    align-self: flex-start;
-    color: #888;
-    font-size: 13px;
-    padding-left: 4px;
-  }
+  .user { align-self: flex-end; background: #ffd9ea; }
+  .bot { align-self: flex-start; background: #ffffff; border: 1px solid #e5e5e5; }
+  .typing { align-self: flex-start; color: #888; font-size: 13px; padding-left: 4px; }
   #inputBar {
     display: flex;
     padding: 12px;
@@ -69,7 +103,7 @@
     outline: none;
   }
   #sendBtn {
-    background: #4A90D9;
+    background: #d94a90;
     color: white;
     border: none;
     border-radius: 24px;
@@ -82,20 +116,84 @@
 </head>
 <body>
 
-<header>Bestfriend</header>
-<div id="chat"></div>
-<div id="inputBar">
-  <input id="msgInput" type="text" placeholder="Type a message..." autocomplete="off" />
-  <button id="sendBtn">Send</button>
+<header>Sakshi 💕</header>
+
+<div id="authScreen">
+  <input id="username" type="text" placeholder="Username" autocomplete="username" />
+  <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+  <div id="authError"></div>
+  <button id="authSubmitBtn">Login</button>
+  <button id="authToggle">New here? Register instead</button>
+</div>
+
+<div id="chatScreen">
+  <div id="chat"></div>
+  <div id="inputBar">
+    <input id="msgInput" type="text" placeholder="Type a message..." autocomplete="off" />
+    <button id="sendBtn">Send</button>
+  </div>
 </div>
 
 <script>
+  const authScreen = document.getElementById("authScreen");
+  const chatScreen = document.getElementById("chatScreen");
+  const usernameEl = document.getElementById("username");
+  const passwordEl = document.getElementById("password");
+  const authError = document.getElementById("authError");
+  const authSubmitBtn = document.getElementById("authSubmitBtn");
+  const authToggle = document.getElementById("authToggle");
+
   const chatEl = document.getElementById("chat");
   const inputEl = document.getElementById("msgInput");
   const sendBtn = document.getElementById("sendBtn");
 
-  // One session id per browser tab (kept in memory only, not persisted).
-  const sessionId = "session-" + Math.random().toString(36).slice(2, 10);
+  let mode = "login"; // or "register"
+  let token = localStorage.getItem("sakshi_token") || null;
+
+  function showChat() {
+    authScreen.style.display = "none";
+    chatScreen.style.display = "flex";
+    inputEl.focus();
+  }
+
+  if (token) showChat();
+
+  authToggle.addEventListener("click", () => {
+    mode = mode === "login" ? "register" : "login";
+    authSubmitBtn.textContent = mode === "login" ? "Login" : "Register";
+    authToggle.textContent = mode === "login" ? "New here? Register instead" : "Already have an account? Login";
+    authError.textContent = "";
+  });
+
+  authSubmitBtn.addEventListener("click", async () => {
+    const username = usernameEl.value.trim();
+    const password = passwordEl.value;
+    if (!username || !password) {
+      authError.textContent = "Enter username and password.";
+      return;
+    }
+    authError.textContent = "";
+    authSubmitBtn.disabled = true;
+    try {
+      const res = await fetch(`/api/${mode}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ username, password }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        authError.textContent = data.detail || "Something went wrong.";
+        return;
+      }
+      token = data.token;
+      localStorage.setItem("sakshi_token", token);
+      showChat();
+    } catch (err) {
+      authError.textContent = "Network error, try again.";
+    } finally {
+      authSubmitBtn.disabled = false;
+    }
+  });
 
   function addBubble(text, cls) {
     const div = document.createElement("div");
@@ -123,9 +221,17 @@
     try {
       const res = await fetch("/api/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ session_id: sessionId, message: text }),
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": "Bearer " + token,
+        },
+        body: JSON.stringify({ message: text }),
       });
+      if (res.status === 401) {
+        localStorage.removeItem("sakshi_token");
+        location.reload();
+        return;
+      }
       const data = await res.json();
       typingEl.remove();
       addBubble(data.reply, "bot");
