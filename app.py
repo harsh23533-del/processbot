@@ -526,3 +526,9 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/model-info")
+def model_info():
+    """Shows which OpenRouter model is currently configured (no secrets)."""
+    return {"model": MODEL}
