@@ -6,10 +6,10 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: OPENROUTER_API_KEY
+      - key: MOONSHOT_API_KEY
         sync: false
-      - key: OPENROUTER_MODEL
-        value: anthropic/claude-sonnet-4.5
+      - key: MOONSHOT_MODEL
+        value: kimi-k2.5
       - key: DB_PATH
         value: /var/data/chatbot.db
     disk:

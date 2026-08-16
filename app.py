@@ -33,10 +33,10 @@ app = FastAPI(title="Friend Circle")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = OpenAI(
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    base_url="https://openrouter.ai/api/v1",
+    api_key=os.getenv("MOONSHOT_API_KEY"),
+    base_url="https://api.moonshot.ai/v1",
 )
-MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
+MODEL = os.getenv("MOONSHOT_MODEL", "kimi-k2.5")
 
 DB_PATH = os.getenv("DB_PATH", "chatbot.db")
 
@@ -484,12 +484,12 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
         if e.status_code in (401, 403):
             raise HTTPException(
                 status_code=502,
-                detail="AI service rejected the request — check that OPENROUTER_API_KEY is set and valid.",
+                detail="AI service rejected the request — check that MOONSHOT_API_KEY is set and valid.",
             )
         if e.status_code == 402:
             raise HTTPException(
                 status_code=502,
-                detail="OpenRouter credits are exhausted — add credits at openrouter.ai/credits.",
+                detail="Moonshot account balance is exhausted — add credits at platform.moonshot.ai.",
             )
         if e.status_code == 429:
             raise HTTPException(
@@ -526,3 +526,9 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
 @app.get("/health")
 def health():
     return {"status": "ok"}
+
+
+@app.get("/api/model-info")
+def model_info():
+    """Shows which model is currently configured (no secrets)."""
+    return {"model": MODEL}
