@@ -36,7 +36,7 @@ client = OpenAI(
     api_key=os.getenv("OPENROUTER_API_KEY"),
     base_url="https://openrouter.ai/api/v1",
 )
-MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
+MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 
 DB_PATH = os.getenv("DB_PATH", "chatbot.db")
 
