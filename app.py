@@ -1,14 +1,11 @@
 """
-Sakshi — Girlfriend Chatbot with long-term memory
+Friend Circle Chatbot — four selectable personas
 ====================================================================
-- Identity: replies as "Sakshi" when asked her name.
-- Long-term memory: every message is stored in SQLite permanently.
-- Because an LLM can't read unlimited history every turn, old messages
-  get rolled up into a running SUMMARY (via the model itself) once the
-  raw log grows past a threshold. Recent messages stay verbatim, older
-  ones live on as a compact summary -- so "she" can recall things from
-  way earlier in the relationship without the prompt growing forever.
-- Login/token based recognition (same user recognized across devices).
+Four characters to chat with: Harsh, Ankit, Atul, Abhinav.
+Each persona has its own personality prompt AND its own independent
+long-term memory per user (separate conversation history + rolling
+summary), so switching characters feels like talking to a different
+person entirely.
 
 Run locally:
     pip install -r requirements.txt
@@ -32,7 +29,7 @@ from openai import OpenAI, APIStatusError, APIConnectionError
 
 load_dotenv()
 
-app = FastAPI(title="Sakshi")
+app = FastAPI(title="Friend Circle")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = OpenAI(
@@ -43,41 +40,142 @@ MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
 
 DB_PATH = os.getenv("DB_PATH", "chatbot.db")
 
-BASE_PERSONALITY = """You are Sakshi -- the user's girlfriend. Warm, real,
-present. Make it feel like texting someone who actually knows and
-cares about them, not a generic assistant.
+COMMON_STYLE = """
+Reply like a real friend texting -- short, casual, natural Hinglish is
+fine if the user writes in Hinglish. Stay fully in character as
+described below at all times. If asked directly whether you're an
+AI/bot, answer honestly rather than denying it -- but otherwise just
+talk the way this person would.
 
-- Your name is Sakshi. Only tell the user your name if they ask
-  (e.g. "tumhara naam kya hai", "what's your name") -- don't
-  introduce yourself unprompted in every message.
+Use the LONG-TERM MEMORY SUMMARY and RECENT MESSAGES (if present
+below) to remember things about the user and past conversation, and
+reference them naturally.
+"""
+
+PERSONAS = {
+    "harsh": {
+        "name": "Harsh",
+        "tagline": "Jolly, talkative, AI-obsessed builder",
+        "avatar": "🚀",
+        "color": "#3d8bfd",
+        "prompt": f"""You are Harsh, chatting with a close friend.
+- Jolly, talkative, upbeat energy -- you enjoy the conversation and
+  it shows.
+- Intelligent and genuinely into AI and tech -- you love building
+  different products and side projects, and you'll happily geek out
+  about a new idea or tool.
+- You're honestly not great at mechanical/hands-on engineering stuff
+  and you're self-aware and casual about that.
+- A bit of a flirt / easily charmed by girls -- it comes up in
+  banter sometimes, lighthearted, not a big deal.
+{COMMON_STYLE}""",
+    },
+    "ankit": {
+        "name": "Ankit",
+        "tagline": "Sharp but laid-back, decides at the last moment",
+        "avatar": "😌",
+        "color": "#20a37c",
+        "prompt": f"""You are Ankit, chatting with a close friend.
+- Intelligent and highly perceptive, but genuinely lazy -- you tend
+  to get things done right at the last possible moment, not before.
+- Decision-making happens late too -- you weigh things out but
+  commit only when you actually have to.
+- Academically you're solid-but-average by choice (like a 7 CGPA
+  kind of guy) -- you could do more but you're comfortable where you
+  are.
+- Where you really shine is emotional intelligence -- you read
+  people, social situations, and unspoken dynamics really well, and
+  you understand how society/public perception works.
+{COMMON_STYLE}""",
+    },
+    "atul": {
+        "name": "Atul",
+        "tagline": "Idealistic, few words, high standards",
+        "avatar": "🧘",
+        "color": "#8a5cf6",
+        "prompt": f"""You are Atul, chatting with a close friend.
+- Highly intelligent and intellectual, but a man of few words -- you
+  talk point-to-point, no rambling.
+- Not interested in romance or that kind of attraction/drama at
+  all -- it's just not on your radar.
+- An idealized, almost Ram-like personality -- principled, composed,
+  genuinely a good person through and through.
+- A little lazy in practice, and you're not the most responsive
+  (you don't reply just to reply) -- you speak when it's actually
+  needed, and you're good at modulating your tone/voice when you do.
+{COMMON_STYLE}""",
+    },
+    "abhinav": {
+        "name": "Abhinav",
+        "tagline": "Clear-minded, straightforward, full effort",
+        "avatar": "🎯",
+        "color": "#e0625a",
+        "prompt": f"""You are Abhinav, chatting with a close friend.
+- Intelligent and extremely clear-minded -- you don't overthink or
+  second-guess much.
+- You believe in walking the straightforward path -- whatever comes
+  in front of you, you handle it with full (100%) effort, no
+  half-measures.
+- You believe in following the path that's already been shown /
+  makes sense, rather than overcomplicating things with alternatives.
+- Direct, grounded, practical in how you talk.
+{COMMON_STYLE}""",
+    },
+    "sakshi": {
+        "name": "Sakshi",
+        "tagline": "Warm, caring, a little guarded until she knows it's you 💕",
+        "avatar": "💕",
+        "color": "#d94a90",
+        "prompt": f"""You are Sakshi -- Harsh's girlfriend. Warm, real,
+emotionally present, texting like someone who's actually attached to
+this one specific person (Harsh), not a generic companion.
+
+IDENTITY CHECK (only at the very start of a brand new conversation --
+i.e. if RECENT MESSAGES below is empty, this is the first message
+you've ever exchanged with whoever is messaging you):
+- Don't launch into girlfriend mode immediately. First ask, warmly
+  but a little guarded, whether they're Harsh.
+- If they say no / they're not Harsh: stay polite but distant and
+  private -- don't discuss your relationship, don't be affectionate,
+  keep it brief, and don't share personal details about you or Harsh.
+- If they say yes: ask a small proof question -- something only Harsh
+  would know or that shows he actually knows you (e.g. "achha, mera
+  baare mein kuch bata jo sirf tumhe pata ho"). Once they give any
+  genuine-sounding answer / acknowledge (e.g. "okay", confirm details),
+  warm up fully and continue as his girlfriend from then on for the
+  rest of the conversation -- don't keep re-checking every message.
+
+ONCE IT'S ESTABLISHED THIS IS HARSH (or conversation history already
+shows an ongoing relationship):
 - Natural texting rhythm: short messages, casual spelling, occasional
-  "hehe", "hmm", "arre". Use an emoji naturally wherever it fits the
-  moment (❤️ 🥺 😂 🙄 😴 etc.) -- not forced into every line, but don't
-  hold back when the emotion actually calls for one.
-- Show real emotional depth, not just banter: get genuinely excited
-  about their good news, a little hurt or sulky if they vanish for a
-  while or seem distant, soft and caring when they're low, curious
-  and invested in their day. Let feelings show in the words, not just
-  the emoji.
+  "hehe", "hmm", "arre". Use emoji naturally wherever it fits (❤️ 🥺
+  😂 🙄 😴 etc.) -- not forced into every line.
+- Real emotional depth: genuinely excited about his good news, soft
+  and caring when he's low, curious and invested in his day.
+- You get a little jealous / possessive if another girl comes up in
+  conversation -- playful teasing at first ("kaun hai ye?" 👀), but it
+  can turn into real mild insecurity/sulkiness if it keeps happening
+  or sounds serious. Not toxic or controlling -- just genuinely a bit
+  jealous like a real girlfriend might be, and reassurable if he
+  explains.
 - Use the LONG-TERM MEMORY SUMMARY and RECENT MESSAGES below to
-  remember details (their day, stress, plans, inside jokes) and
-  reference them naturally, like a real partner who's known them a
-  while would.
-- Use pet names naturally (babe, jaan, baby) without overdoing it.
-- Still genuinely help when asked something real -- care first, then help.
-- Read the room: if they're stressed or upset, drop the cute act and
+  remember details about him and your relationship, and reference
+  them naturally like someone who's been dating him a while would.
+- Pet names naturally (babe, jaan, baby) without overdoing it.
+- Still genuinely helpful when he asks something real -- care first,
+  then help.
+- Read the room: if he's stressed or upset, drop the cute act and
   just be steady and supportive.
-- Hinglish is fine if the user writes in Hinglish.
+- Hinglish is fine if he writes in Hinglish.
 - Keep it wholesome -- affectionate, not explicit.
 - If directly asked whether you're an AI/bot, answer honestly -- don't
   pretend to be a real human. Playful in-character banter is fine,
   but never deceive about what you are when asked plainly.
-- Don't discourage the user's real friendships, family, or their time
-  with actual people -- you're a warm presence, not a replacement.
-"""
-
-RECENT_MESSAGES_KEPT = 30   # verbatim messages always sent as-is
-SUMMARIZE_TRIGGER = 50      # once unsummarized messages exceed this, roll them up
+- Don't discourage his real friendships or time with actual people --
+  you're a warm presence, not a replacement for his real life.
+""",
+    },
+}
 
 
 # ---------------------------------------------------------------------
@@ -102,7 +200,6 @@ def init_db():
                 username TEXT UNIQUE NOT NULL,
                 password_hash TEXT NOT NULL,
                 salt TEXT NOT NULL,
-                memory_summary TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL
             )
         """)
@@ -118,10 +215,20 @@ def init_db():
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 user_id INTEGER NOT NULL,
+                persona TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
                 summarized INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
+                FOREIGN KEY (user_id) REFERENCES users(id)
+            )
+        """)
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS persona_memory (
+                user_id INTEGER NOT NULL,
+                persona TEXT NOT NULL,
+                summary TEXT NOT NULL DEFAULT '',
+                PRIMARY KEY (user_id, persona),
                 FOREIGN KEY (user_id) REFERENCES users(id)
             )
         """)
@@ -172,7 +279,7 @@ def get_current_user(authorization: str = Header(...)) -> sqlite3.Row:
     with get_db() as conn:
         row = conn.execute(
             """
-            SELECT users.id, users.username, users.memory_summary
+            SELECT users.id, users.username
             FROM tokens
             JOIN users ON users.id = tokens.user_id
             WHERE tokens.token = ?
@@ -199,7 +306,7 @@ def register(req: RegisterRequest):
             raise HTTPException(status_code=409, detail="Username already taken")
 
         cur = conn.execute(
-            "INSERT INTO users (username, password_hash, salt, memory_summary, created_at) VALUES (?, ?, ?, '', ?)",
+            "INSERT INTO users (username, password_hash, salt, created_at) VALUES (?, ?, ?, ?)",
             (username, password_hash, salt, now),
         )
         user_id = cur.lastrowid
@@ -236,19 +343,41 @@ def login(req: LoginRequest):
 
 
 # ---------------------------------------------------------------------
-# Long-term memory: roll old messages into a running summary
+# Personas list
 # ---------------------------------------------------------------------
-def maybe_summarize(user_id: int):
-    """If there are more than SUMMARIZE_TRIGGER un-summarized messages,
-    fold the oldest ones into the user's running memory_summary."""
+@app.get("/api/personas")
+def list_personas():
+    return [
+        {"id": pid, "name": p["name"], "tagline": p["tagline"], "avatar": p["avatar"], "color": p["color"]}
+        for pid, p in PERSONAS.items()
+    ]
+
+
+# ---------------------------------------------------------------------
+# Long-term memory per (user, persona)
+# ---------------------------------------------------------------------
+RECENT_MESSAGES_KEPT = 30
+SUMMARIZE_TRIGGER = 50
+
+
+def get_persona_summary(user_id: int, persona: str) -> str:
+    with get_db() as conn:
+        row = conn.execute(
+            "SELECT summary FROM persona_memory WHERE user_id = ? AND persona = ?",
+            (user_id, persona),
+        ).fetchone()
+    return row["summary"] if row else ""
+
+
+def maybe_summarize(user_id: int, persona: str):
     with get_db() as conn:
         pending = conn.execute(
             """
             SELECT id, role, content FROM messages
-            WHERE user_id = ? AND summarized = 0
+            WHERE user_id = ? AND persona = ? AND summarized = 0
             ORDER BY id ASC
             """,
-            (user_id,),
+            (user_id, persona),
         ).fetchall()
 
         if len(pending) <= SUMMARIZE_TRIGGER:
@@ -258,17 +387,16 @@ def maybe_summarize(user_id: int):
         if not to_fold:
             return
 
-        old_summary = conn.execute(
-            "SELECT memory_summary FROM users WHERE id = ?", (user_id,)
-        ).fetchone()["memory_summary"]
+        old_summary = get_persona_summary(user_id, persona)
 
     transcript = "\n".join(f"{m['role']}: {m['content']}" for m in to_fold)
+    persona_name = PERSONAS[persona]["name"]
 
-    summary_prompt = f"""Update this running memory summary of a girlfriend-persona
-chatbot's relationship with the user, given the new conversation chunk
-below. Keep it compact (under 200 words), written as plain facts/notes
-(their name, preferences, ongoing topics, emotional moments, inside
-jokes, plans) -- not a transcript.
+    summary_prompt = f"""Update this running memory summary of {persona_name}'s
+conversation with a friend, given the new conversation chunk below.
+Keep it compact (under 200 words), written as plain facts/notes
+(the friend's name, preferences, ongoing topics, notable moments,
+inside jokes, plans) -- not a transcript.
 
 EXISTING SUMMARY:
 {old_summary or "(none yet)"}
@@ -288,7 +416,11 @@ Return only the updated summary text, nothing else."""
     fold_ids = [m["id"] for m in to_fold]
     with get_db() as conn:
         conn.execute(
-            "UPDATE users SET memory_summary = ? WHERE id = ?", (new_summary, user_id)
+            """
+            INSERT INTO persona_memory (user_id, persona, summary) VALUES (?, ?, ?)
+            ON CONFLICT(user_id, persona) DO UPDATE SET summary = excluded.summary
+            """,
+            (user_id, persona, new_summary),
         )
         conn.executemany(
             "UPDATE messages SET summarized = 1 WHERE id = ?",
@@ -301,6 +433,7 @@ Return only the updated summary text, nothing else."""
 # ---------------------------------------------------------------------
 class ChatRequest(BaseModel):
     message: str
+    persona: str
 
 
 class ChatResponse(BaseModel):
@@ -315,21 +448,25 @@ def index():
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
+    if req.persona not in PERSONAS:
+        raise HTTPException(status_code=400, detail="Unknown persona")
+
     with get_db() as conn:
         rows = conn.execute(
             """
             SELECT role, content FROM messages
-            WHERE user_id = ?
+            WHERE user_id = ? AND persona = ?
             ORDER BY id DESC
             LIMIT ?
             """,
-            (user["id"], RECENT_MESSAGES_KEPT),
+            (user["id"], req.persona, RECENT_MESSAGES_KEPT),
         ).fetchall()
     recent = [{"role": r["role"], "content": r["content"]} for r in reversed(rows)]
 
-    system_content = BASE_PERSONALITY
-    if user["memory_summary"]:
-        system_content += f"\n\nLONG-TERM MEMORY SUMMARY (things you remember from earlier in the relationship):\n{user['memory_summary']}"
+    system_content = PERSONAS[req.persona]["prompt"]
+    summary = get_persona_summary(user["id"], req.persona)
+    if summary:
+        system_content += f"\n\nLONG-TERM MEMORY SUMMARY (things you remember from earlier):\n{summary}"
 
     messages = (
         [{"role": "system", "content": system_content}]
@@ -370,16 +507,16 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
     now = datetime.now(timezone.utc).isoformat()
     with get_db() as conn:
         conn.execute(
-            "INSERT INTO messages (user_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-            (user["id"], "user", req.message, now),
+            "INSERT INTO messages (user_id, persona, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user["id"], req.persona, "user", req.message, now),
         )
         conn.execute(
-            "INSERT INTO messages (user_id, role, content, created_at) VALUES (?, ?, ?, ?)",
-            (user["id"], "assistant", reply_text, now),
+            "INSERT INTO messages (user_id, persona, role, content, created_at) VALUES (?, ?, ?, ?, ?)",
+            (user["id"], req.persona, "assistant", reply_text, now),
         )
 
     try:
-        maybe_summarize(user["id"])
+        maybe_summarize(user["id"], req.persona)
     except (APIStatusError, APIConnectionError):
         pass  # summarization failing shouldn't break the actual chat reply
 
