@@ -25,7 +25,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import OpenAI, APIStatusError, APIConnectionError
 
 load_dotenv()
 
@@ -474,12 +474,35 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
         + [{"role": "user", "content": req.message}]
     )
 
-    response = client.chat.completions.create(
-        model=MODEL,
-        max_tokens=300,
-        messages=messages,
-    )
+    try:
+        response = client.chat.completions.create(
+            model=MODEL,
+            max_tokens=300,
+            messages=messages,
+        )
+    except APIStatusError as e:
+        if e.status_code in (401, 403):
+            raise HTTPException(
+                status_code=502,
+                detail="AI service rejected the request — check that OPENROUTER_API_KEY is set and valid.",
+            )
+        if e.status_code == 402:
+            raise HTTPException(
+                status_code=502,
+                detail="OpenRouter credits are exhausted — add credits at openrouter.ai/credits.",
+            )
+        if e.status_code == 429:
+            raise HTTPException(
+                status_code=502,
+                detail="Rate limit hit on the AI service — wait a bit and try again.",
+            )
+        raise HTTPException(status_code=502, detail=f"AI service error ({e.status_code}). Try again shortly.")
+    except APIConnectionError:
+        raise HTTPException(status_code=502, detail="Couldn't reach the AI service. Try again shortly.")
+
     reply_text = response.choices[0].message.content
+    if not reply_text:
+        raise HTTPException(status_code=502, detail="AI service returned an empty reply. Try again.")
 
     now = datetime.now(timezone.utc).isoformat()
     with get_db() as conn:
@@ -492,7 +515,10 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
             (user["id"], req.persona, "assistant", reply_text, now),
         )
 
-    maybe_summarize(user["id"], req.persona)
+    try:
+        maybe_summarize(user["id"], req.persona)
+    except (APIStatusError, APIConnectionError):
+        pass  # summarization failing shouldn't break the actual chat reply
 
     return ChatResponse(reply=reply_text)
 

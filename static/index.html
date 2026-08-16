@@ -356,12 +356,29 @@
         location.reload();
         return;
       }
-      const data = await res.json();
+
+      let data;
+      try {
+        data = await res.json();
+      } catch {
+        data = null;
+      }
+
       typingEl.remove();
+
+      if (!res.ok) {
+        const msg = (data && data.detail) || `Server error (${res.status}). Try again in a moment.`;
+        addBubble(msg, "bot");
+        return;
+      }
+      if (!data || !data.reply) {
+        addBubble("No reply came back. Try again.", "bot");
+        return;
+      }
       addBubble(data.reply, "bot");
     } catch (err) {
       typingEl.remove();
-      addBubble("Something went wrong, try again.", "bot");
+      addBubble("Couldn't reach the server — check your connection and try again.", "bot");
     } finally {
       sendBtn.disabled = false;
       inputEl.focus();
