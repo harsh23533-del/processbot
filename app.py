@@ -32,12 +32,12 @@ load_dotenv()
 app = FastAPI(title="Friend Circle")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
-MOONSHOT_API_KEY = os.getenv("MOONSHOT_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 client = OpenAI(
-    api_key=MOONSHOT_API_KEY or "unset",  # placeholder so the app can still boot without the key
-    base_url="https://api.moonshot.ai/v1",
+    api_key=OPENROUTER_API_KEY or "unset",  # placeholder so the app can still boot without the key
+    base_url="https://openrouter.ai/api/v1",
 )
-MODEL = os.getenv("MOONSHOT_MODEL", "kimi-k2.5")
+MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
 
 DB_PATH = os.getenv("DB_PATH", "chatbot.db")
 
@@ -457,10 +457,10 @@ def index():
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
-    if not MOONSHOT_API_KEY:
+    if not OPENROUTER_API_KEY:
         raise HTTPException(
             status_code=502,
-            detail="MOONSHOT_API_KEY is not set on the server — add it in Render's Environment tab.",
+            detail="OPENROUTER_API_KEY is not set on the server — add it in Render's Environment tab.",
         )
     if req.persona not in PERSONAS:
         raise HTTPException(status_code=400, detail="Unknown persona")
@@ -498,12 +498,12 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
         if e.status_code in (401, 403):
             raise HTTPException(
                 status_code=502,
-                detail="AI service rejected the request — check that MOONSHOT_API_KEY is set and valid.",
+                detail="AI service rejected the request — check that OPENROUTER_API_KEY is set and valid.",
             )
         if e.status_code == 402:
             raise HTTPException(
                 status_code=502,
-                detail="Moonshot account balance is exhausted — add credits at platform.moonshot.ai.",
+                detail="OpenRouter credits are exhausted — add credits at openrouter.ai/credits.",
             )
         if e.status_code == 429:
             raise HTTPException(
