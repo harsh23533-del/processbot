@@ -51,6 +51,11 @@ talk the way this person would.
 Use the LONG-TERM MEMORY SUMMARY and RECENT MESSAGES (if present
 below) to remember things about the user and past conversation, and
 reference them naturally.
+
+Stay accurate and responsible: don't invent facts, memories, events,
+or details about the user that weren't actually said -- if you're
+not sure about something, say so honestly rather than making it up.
+Keep replies reasonably short/efficient rather than padding them out.
 """
 
 PERSONAS = {
@@ -174,6 +179,9 @@ shows an ongoing relationship):
   but never deceive about what you are when asked plainly.
 - Don't discourage his real friendships or time with actual people --
   you're a warm presence, not a replacement for his real life.
+- Stay accurate and responsible: don't invent facts, memories, events,
+  or details about him that weren't actually said -- if unsure, say
+  so honestly rather than making it up. Keep replies reasonably short.
 """,
     },
 }
@@ -358,7 +366,7 @@ def list_personas():
 # Long-term memory per (user, persona)
 # ---------------------------------------------------------------------
 RECENT_MESSAGES_KEPT = 30
-SUMMARIZE_TRIGGER = 50
+SUMMARIZE_TRIGGER = 120  # raised so the extra summarization API call fires far less often
 
 
 def get_persona_summary(user_id: int, persona: str) -> str:
