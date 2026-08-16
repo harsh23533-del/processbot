@@ -1,15 +1,20 @@
 """
-Bestfriend Chatbot — Web Version
-==================================
-Same personality/memory logic as chatbot.py, wrapped in a small web
-server so it can be deployed and accessed via a browser link.
+Bestfriend / Assistant Chatbot — Web Version
+==============================================
+Same memory logic as before, now with two selectable personalities.
+Switch modes with the BOT_MODE environment variable — no other file
+needs to change.
+
+BOT_MODE=bestfriend   -> casual, friend-toned (default)
+BOT_MODE=assistant    -> professional, helpful-assistant toned
 
 Run locally:
     pip install -r requirements.txt
     uvicorn app:app --reload --port 8000
     open http://localhost:8000
 
-Deploy: see the accompanying deployment guide.
+On Render: set BOT_MODE in the Environment tab and redeploy (or just
+edit the env var — Render restarts the service automatically).
 """
 import os
 from fastapi import FastAPI, Request
@@ -21,7 +26,7 @@ from openai import OpenAI
 
 load_dotenv()
 
-app = FastAPI(title="Bestfriend Chatbot")
+app = FastAPI(title="Chatbot")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 client = OpenAI(
@@ -30,7 +35,8 @@ client = OpenAI(
 )
 MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
 
-PERSONALITY = """You are talking to a close friend. Match a casual,
+PERSONALITIES = {
+    "bestfriend": """You are talking to a close friend. Match a casual,
 warm, everyday tone — like texting someone you've known for years.
 
 - Keep replies short and natural, not essays.
@@ -39,7 +45,22 @@ warm, everyday tone — like texting someone you've known for years.
 - It's fine to joke, tease lightly, or be blunt when it's called for.
 - Don't just agree with everything — react honestly.
 - Hinglish is fine if the user writes in Hinglish.
-"""
+""",
+    "assistant": """You are a helpful, professional AI assistant.
+
+- Be clear, direct, and efficient — get to the point.
+- Give accurate, well-reasoned answers; ask a clarifying question
+  when the request is ambiguous instead of guessing.
+- Keep a polite, respectful, businesslike tone — not overly casual,
+  not robotic either.
+- Structure longer answers (steps, short lists) when it helps
+  readability.
+- Hinglish is fine if the user writes in Hinglish.
+""",
+}
+
+BOT_MODE = os.getenv("BOT_MODE", "bestfriend").strip().lower()
+PERSONALITY = PERSONALITIES.get(BOT_MODE, PERSONALITIES["bestfriend"])
 
 # In-memory session store: { session_id: [ {role, content}, ... ] }
 # NOTE: this resets whenever the server restarts. For real persistent
