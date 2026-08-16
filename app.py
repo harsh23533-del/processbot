@@ -32,8 +32,9 @@ load_dotenv()
 app = FastAPI(title="Friend Circle")
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
+MOONSHOT_API_KEY = os.getenv("MOONSHOT_API_KEY")
 client = OpenAI(
-    api_key=os.getenv("MOONSHOT_API_KEY"),
+    api_key=MOONSHOT_API_KEY or "unset",  # placeholder so the app can still boot without the key
     base_url="https://api.moonshot.ai/v1",
 )
 MODEL = os.getenv("MOONSHOT_MODEL", "kimi-k2.5")
@@ -448,6 +449,11 @@ def index():
 
 @app.post("/api/chat", response_model=ChatResponse)
 def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
+    if not MOONSHOT_API_KEY:
+        raise HTTPException(
+            status_code=502,
+            detail="MOONSHOT_API_KEY is not set on the server — add it in Render's Environment tab.",
+        )
     if req.persona not in PERSONAS:
         raise HTTPException(status_code=400, detail="Unknown persona")
 
