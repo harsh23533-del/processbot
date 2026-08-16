@@ -10,9 +10,3 @@ services:
         sync: false
       - key: MOONSHOT_MODEL
         value: kimi-k2.5
-      - key: DB_PATH
-        value: /var/data/chatbot.db
-    disk:
-      name: chatbot-data
-      mountPath: /var/data
-      sizeGB: 1
