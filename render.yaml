@@ -9,4 +9,4 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_MODEL
-        value: anthropic/claude-sonnet-4.5
+        value: openrouter/free

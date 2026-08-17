@@ -37,7 +37,7 @@ client = OpenAI(
     api_key=OPENROUTER_API_KEY or "unset",  # placeholder so the app can still boot without the key
     base_url="https://openrouter.ai/api/v1",
 )
-MODEL = os.getenv("OPENROUTER_MODEL", "anthropic/claude-sonnet-4.5")
+MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
 
 DB_PATH = os.getenv("DB_PATH", "chatbot.db")
 
