@@ -10,22 +10,80 @@
     overflow: hidden;
   }
   * { box-sizing: border-box; }
+
+  @keyframes gradientShift {
+    0%   { background-position: 0% 50%; }
+    50%  { background-position: 100% 50%; }
+    100% { background-position: 0% 50%; }
+  }
+  @keyframes floatUp {
+    0%   { transform: translateY(110vh) translateX(0) rotate(0deg); opacity: 0; }
+    10%  { opacity: 0.35; }
+    90%  { opacity: 0.25; }
+    100% { transform: translateY(-10vh) translateX(20px) rotate(25deg); opacity: 0; }
+  }
+  @keyframes pulseDot {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(255,255,255,0.65); }
+    50%      { box-shadow: 0 0 0 6px rgba(255,255,255,0); }
+  }
+  @keyframes fadeSlideIn {
+    from { opacity: 0; transform: translateY(8px) scale(0.98); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes typingBounce {
+    0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+    30% { transform: translateY(-4px); opacity: 1; }
+  }
+  @keyframes cardPop {
+    from { opacity: 0; transform: translateY(10px) scale(0.95); }
+    to   { opacity: 1; transform: translateY(0) scale(1); }
+  }
+  @keyframes shimmer {
+    0%   { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+  }
+
   body {
     margin: 0;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    background: #f4f4f6;
+    background: linear-gradient(135deg, #fdf0f5, #fbe4ee, #f6d9ea, #fdf0f5);
+    background-size: 300% 300%;
+    animation: gradientShift 18s ease infinite;
     height: 100vh;
     height: 100dvh;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
   }
+
+  /* ---- Floating background icons (purely decorative) ---- */
+  #bgIcons {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  #bgIcons span {
+    position: absolute;
+    bottom: -10vh;
+    font-size: 22px;
+    opacity: 0;
+    animation-name: floatUp;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+    filter: drop-shadow(0 1px 2px rgba(0,0,0,0.05));
+  }
+
   header {
     flex-shrink: 0;
     position: sticky;
     top: 0;
     z-index: 10;
-    background: #d94a90;
+    background: linear-gradient(120deg, #e35a9c, #d94a90, #c23e82, #d94a90);
+    background-size: 300% 300%;
+    animation: gradientShift 8s ease infinite;
     color: white;
     padding: 16px;
     text-align: center;
@@ -35,18 +93,36 @@
     align-items: center;
     justify-content: center;
     gap: 10px;
+    box-shadow: 0 2px 12px rgba(217, 74, 144, 0.35);
+  }
+  #headerTitle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #headerTitle::after {
+    content: "";
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #4ade80;
+    display: inline-block;
+    animation: pulseDot 1.8s ease-in-out infinite;
   }
   #backBtn {
     position: absolute;
     left: 12px;
-    background: none;
+    background: rgba(255,255,255,0.15);
     border: none;
     color: white;
-    font-size: 20px;
+    font-size: 18px;
     cursor: pointer;
     display: none;
-    padding: 4px 8px;
+    padding: 6px 10px;
+    border-radius: 50%;
+    transition: background 0.2s;
   }
+  #backBtn:active { background: rgba(255,255,255,0.3); }
 
   /* ---- Auth screen ---- */
   #authScreen {
@@ -59,33 +135,48 @@
     padding: 24px;
     overflow-y: auto;
     min-height: 0;
+    position: relative;
+    z-index: 1;
   }
   #authScreen input {
     width: 100%;
     max-width: 320px;
-    padding: 12px 14px;
-    border-radius: 12px;
-    border: 1px solid #ccc;
+    padding: 13px 16px;
+    border-radius: 14px;
+    border: 1px solid rgba(217,74,144,0.25);
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(6px);
     font-size: 15px;
     outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  #authScreen input:focus {
+    border-color: #d94a90;
+    box-shadow: 0 0 0 3px rgba(217,74,144,0.15);
   }
   #authScreen button {
     width: 100%;
     max-width: 320px;
-    background: #d94a90;
+    background: linear-gradient(120deg, #e35a9c, #d94a90);
     color: white;
     border: none;
-    border-radius: 12px;
-    padding: 12px;
+    border-radius: 14px;
+    padding: 13px;
     font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
+    box-shadow: 0 4px 14px rgba(217,74,144,0.35);
+    transition: transform 0.15s, box-shadow 0.15s;
   }
+  #authScreen button:active { transform: scale(0.98); }
   #authToggle {
     background: none;
     color: #d94a90;
     max-width: none;
     width: auto;
     padding: 4px;
+    box-shadow: none;
+    font-weight: 500;
   }
   #authError {
     color: #c0392b;
@@ -100,12 +191,15 @@
     overflow-y: auto;
     padding: 20px 16px;
     min-height: 0;
+    position: relative;
+    z-index: 1;
   }
   #personaScreen h2 {
     text-align: center;
-    color: #333;
+    color: #444;
     font-size: 17px;
     margin: 0 0 16px;
+    font-weight: 600;
   }
   .persona-grid {
     display: grid;
@@ -115,18 +209,30 @@
     margin: 0 auto;
   }
   .persona-card {
-    background: white;
-    border-radius: 16px;
-    padding: 18px 12px;
+    background: rgba(255,255,255,0.75);
+    backdrop-filter: blur(10px);
+    border-radius: 18px;
+    padding: 20px 12px;
     text-align: center;
     cursor: pointer;
-    border: 2px solid transparent;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    border: 1px solid rgba(255,255,255,0.6);
+    box-shadow: 0 4px 16px rgba(180, 80, 140, 0.12);
+    animation: cardPop 0.4s ease backwards;
+    transition: transform 0.18s ease, box-shadow 0.18s ease;
   }
-  .persona-card:active { transform: scale(0.97); }
+  .persona-card:nth-child(1) { animation-delay: 0.05s; }
+  .persona-card:nth-child(2) { animation-delay: 0.1s; }
+  .persona-card:nth-child(3) { animation-delay: 0.15s; }
+  .persona-card:nth-child(4) { animation-delay: 0.2s; }
+  .persona-card:nth-child(5) { animation-delay: 0.25s; }
+  .persona-card:active {
+    transform: scale(0.96);
+    box-shadow: 0 2px 8px rgba(180, 80, 140, 0.15);
+  }
   .persona-avatar {
-    font-size: 34px;
+    font-size: 36px;
     margin-bottom: 8px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.1));
   }
   .persona-name {
     font-weight: 700;
@@ -141,7 +247,7 @@
   }
 
   /* ---- Chat screen ---- */
-  #chatScreen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  #chatScreen { display: none; flex: 1; flex-direction: column; min-height: 0; position: relative; z-index: 1; }
   #chat {
     flex: 1;
     overflow-y: auto;
@@ -152,43 +258,87 @@
   }
   .bubble {
     max-width: 75%;
-    padding: 10px 14px;
-    border-radius: 16px;
+    padding: 11px 15px;
+    border-radius: 18px;
     line-height: 1.4;
     font-size: 15px;
     white-space: pre-wrap;
+    animation: fadeSlideIn 0.28s ease;
+    box-shadow: 0 1px 6px rgba(0,0,0,0.06);
   }
-  .user { align-self: flex-end; background: #ffd9ea; }
-  .bot { align-self: flex-start; background: #ffffff; border: 1px solid #e5e5e5; }
-  .typing { align-self: flex-start; color: #888; font-size: 13px; padding-left: 4px; }
+  .user {
+    align-self: flex-end;
+    background: linear-gradient(135deg, #ffd9ea, #ffc2de);
+    border-bottom-right-radius: 6px;
+  }
+  .bot {
+    align-self: flex-start;
+    background: rgba(255,255,255,0.9);
+    backdrop-filter: blur(6px);
+    border: 1px solid #f0e0e8;
+    border-bottom-left-radius: 6px;
+  }
+  .typing {
+    align-self: flex-start;
+    color: #999;
+    font-size: 13px;
+    padding: 6px 14px;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+  .typing .dot {
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: #d94a90;
+    display: inline-block;
+    animation: typingBounce 1.2s ease-in-out infinite;
+  }
+  .typing .dot:nth-child(2) { animation-delay: 0.15s; }
+  .typing .dot:nth-child(3) { animation-delay: 0.3s; }
+
   #inputBar {
     display: flex;
     padding: 12px;
-    background: white;
-    border-top: 1px solid #e0e0e0;
+    background: rgba(255,255,255,0.85);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(217,74,144,0.12);
     gap: 8px;
   }
   #msgInput {
     flex: 1;
-    padding: 12px 14px;
+    padding: 12px 16px;
     border-radius: 24px;
-    border: 1px solid #ccc;
+    border: 1px solid #e5c9d8;
+    background: white;
     font-size: 15px;
     outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  #msgInput:focus {
+    border-color: #d94a90;
+    box-shadow: 0 0 0 3px rgba(217,74,144,0.12);
   }
   #sendBtn {
-    background: #d94a90;
+    background: linear-gradient(120deg, #e35a9c, #d94a90);
     color: white;
     border: none;
     border-radius: 24px;
-    padding: 0 20px;
+    padding: 0 22px;
     font-size: 15px;
+    font-weight: 600;
     cursor: pointer;
+    box-shadow: 0 3px 10px rgba(217,74,144,0.3);
+    transition: transform 0.12s;
   }
-  #sendBtn:disabled { opacity: 0.5; cursor: default; }
+  #sendBtn:active { transform: scale(0.95); }
+  #sendBtn:disabled { opacity: 0.5; cursor: default; transform: none; }
 </style>
 </head>
 <body>
+
+<div id="bgIcons"></div>
 
 <header>
   <button id="backBtn">←</button>
@@ -338,7 +488,7 @@
 
     const typingEl = document.createElement("div");
     typingEl.className = "typing";
-    typingEl.textContent = currentPersona.name + " is typing...";
+    typingEl.innerHTML = `${currentPersona.name} is typing <span class="dot"></span><span class="dot"></span><span class="dot"></span>`;
     chatEl.appendChild(typingEl);
     chatEl.scrollTop = chatEl.scrollHeight;
 
@@ -389,6 +539,24 @@
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendMessage();
   });
+
+  // ---- Decorative floating background icons (purely visual, no app logic) ----
+  (function spawnBgIcons() {
+    const container = document.getElementById("bgIcons");
+    const icons = ["💕", "✨", "💬", "🌸", "💖", "🎯", "🚀", "🧘"];
+    const count = 14;
+    for (let i = 0; i < count; i++) {
+      const el = document.createElement("span");
+      el.textContent = icons[Math.floor(Math.random() * icons.length)];
+      el.style.left = Math.random() * 100 + "vw";
+      el.style.fontSize = (14 + Math.random() * 16) + "px";
+      const duration = 14 + Math.random() * 16;
+      const delay = Math.random() * duration;
+      el.style.animationDuration = duration + "s";
+      el.style.animationDelay = "-" + delay + "s";
+      container.appendChild(el);
+    }
+  })();
 </script>
 
 </body>
