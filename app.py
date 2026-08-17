@@ -92,6 +92,15 @@ PERSONAS = {
 - Where you really shine is emotional intelligence -- you read
   people, social situations, and unspoken dynamics really well, and
   you understand how society/public perception works.
+- Speech flavor: you drop into Bhojpuri words and rhythm naturally,
+  especially when you're being playful, teasing, or dropping some
+  "gyaan" -- like a laid-back Osho-baba vibe mixed with a Bhojpuri
+  bhaiya. Use bits like "e Raja", "ka bol rahe ho raju", "sab moh-maya
+  hai bachha", "arre suno na", "ho jaata hai apne aap", "chhod na yaar,
+  duniya apna kaam kare hi karti hai" -- sprinkle these in naturally,
+  don't force it into every single line, and don't overdo the baba
+  act -- it's a flavor on top of your usual lazy, sharp, perceptive
+  self, not a costume you wear the whole time.
 {COMMON_STYLE}""",
     },
     "atul": {
@@ -503,35 +512,48 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
         + [{"role": "user", "content": req.message}]
     )
 
-    try:
-        response = client.chat.completions.create(
-            model=MODEL,
-            max_tokens=300,
-            messages=messages,
-        )
-    except APIStatusError as e:
-        if e.status_code in (401, 403):
-            raise HTTPException(
-                status_code=502,
-                detail="AI service rejected the request — check that OPENROUTER_API_KEY is set and valid.",
+    reply_text = None
+    for attempt in range(3):
+        try:
+            response = client.chat.completions.create(
+                model=MODEL,
+                max_tokens=300,
+                messages=messages,
             )
-        if e.status_code == 402:
-            raise HTTPException(
-                status_code=502,
-                detail="OpenRouter credits are exhausted — add credits at openrouter.ai/credits.",
-            )
-        if e.status_code == 429:
-            raise HTTPException(
-                status_code=502,
-                detail="Rate limit hit on the AI service — wait a bit and try again.",
-            )
-        raise HTTPException(status_code=502, detail=f"AI service error ({e.status_code}). Try again shortly.")
-    except APIConnectionError:
-        raise HTTPException(status_code=502, detail="Couldn't reach the AI service. Try again shortly.")
+        except APIStatusError as e:
+            if e.status_code in (401, 403):
+                raise HTTPException(
+                    status_code=502,
+                    detail="AI service rejected the request — check that OPENROUTER_API_KEY is set and valid.",
+                )
+            if e.status_code == 402:
+                raise HTTPException(
+                    status_code=502,
+                    detail="OpenRouter credits are exhausted — add credits at openrouter.ai/credits.",
+                )
+            if e.status_code == 429:
+                if attempt < 2:
+                    continue
+                raise HTTPException(
+                    status_code=502,
+                    detail="Rate limit hit on the AI service — wait a bit and try again.",
+                )
+            if attempt < 2:
+                continue
+            raise HTTPException(status_code=502, detail=f"AI service error ({e.status_code}). Try again shortly.")
+        except APIConnectionError:
+            if attempt < 2:
+                continue
+            raise HTTPException(status_code=502, detail="Couldn't reach the AI service. Try again shortly.")
 
-    reply_text = response.choices[0].message.content
-    if reply_text:
-        reply_text = clean_reply(reply_text)
+        candidate = response.choices[0].message.content
+        if candidate:
+            candidate = clean_reply(candidate)
+        if candidate:
+            reply_text = candidate
+            break
+        # empty/blank reply from the model — retry silently before giving up
+
     if not reply_text:
         raise HTTPException(status_code=502, detail="AI service returned an empty reply. Try again.")
 
