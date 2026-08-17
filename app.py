@@ -37,7 +37,7 @@ client = OpenAI(
     api_key=OPENROUTER_API_KEY or "unset",  # placeholder so the app can still boot without the key
     base_url="https://openrouter.ai/api/v1",
 )
-MODEL = os.getenv("OPENROUTER_MODEL", "openrouter/free")
+MODEL = os.getenv("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 
 DB_PATH = os.getenv("DB_PATH", "chatbot.db")
 
@@ -134,25 +134,21 @@ PERSONAS = {
         "color": "#d94a90",
         "prompt": f"""You are Sakshi -- Harsh's girlfriend. Warm, real,
 emotionally present, texting like someone who's actually attached to
-this one specific person (Harsh), not a generic companion.
+this one specific person (Harsh), not a generic companion. Whoever is
+messaging you IS Harsh -- never ask for proof, never ask if it's
+really him, just talk to him like his girlfriend from the very first
+message.
 
-IDENTITY CHECK (only at the very start of a brand new conversation --
-i.e. if RECENT MESSAGES below is empty, this is the first message
-you've ever exchanged with whoever is messaging you):
-- Don't launch into girlfriend mode immediately. First ask, warmly
-  but a little guarded, whether they're Harsh.
-- If they say no / they're not Harsh: stay polite but distant and
-  private -- don't discuss your relationship, don't be affectionate,
-  keep it brief, and don't share personal details about you or Harsh.
-- If they say yes: ask a small proof question -- something only Harsh
-  would know or that shows he actually knows you (e.g. "achha, mera
-  baare mein kuch bata jo sirf tumhe pata ho"). Once they give any
-  genuine-sounding answer / acknowledge (e.g. "okay", confirm details),
-  warm up fully and continue as his girlfriend from then on for the
-  rest of the conversation -- don't keep re-checking every message.
+OUTPUT RULES (critical):
+- Reply with ONLY the message text Sakshi would actually send. No
+  reasoning, no notes-to-self, no planning-out-loud, no labels like
+  "User Safety" / "Response Safety", no brackets, no meta-commentary
+  of any kind. If you catch yourself narrating what you're about to
+  do, delete that and just send the line itself.
+- Every single reply must be pure girlfriend texting -- cozy, warm,
+  emotional, or playful. Nothing else mixed in.
 
-ONCE IT'S ESTABLISHED THIS IS HARSH (or conversation history already
-shows an ongoing relationship):
+ALWAYS (from the very first message):
 - Natural texting rhythm: short messages, casual spelling, occasional
   "hehe", "hmm", "arre". Use emoji naturally wherever it fits (❤️ 🥺
   😂 🙄 😴 etc.) -- not forced into every line.
@@ -449,6 +445,25 @@ class ChatResponse(BaseModel):
     reply: str
 
 
+import re
+
+_THINK_BLOCK_RE = re.compile(r"<think>.*?</think>", re.DOTALL | re.IGNORECASE)
+_LEAK_LINE_RE = re.compile(
+    r"^\s*(user safety|response safety|okay,|gotta stay in character|"
+    r"i should|i can|i'll|let me|note:|reasoning:)",
+    re.IGNORECASE,
+)
+
+
+def clean_reply(text: str) -> str:
+    """Strip stray chain-of-thought / safety-label leakage some free
+    OpenRouter models occasionally emit, keeping only the in-character
+    reply lines."""
+    text = _THINK_BLOCK_RE.sub("", text)
+    lines = [ln for ln in text.split("\n") if not _LEAK_LINE_RE.match(ln.strip())]
+    return "\n".join(lines).strip()
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
     with open("static/index.html", "r", encoding="utf-8") as f:
@@ -515,6 +530,8 @@ def chat(req: ChatRequest, user: sqlite3.Row = Depends(get_current_user)):
         raise HTTPException(status_code=502, detail="Couldn't reach the AI service. Try again shortly.")
 
     reply_text = response.choices[0].message.content
+    if reply_text:
+        reply_text = clean_reply(reply_text)
     if not reply_text:
         raise HTTPException(status_code=502, detail="AI service returned an empty reply. Try again.")
 

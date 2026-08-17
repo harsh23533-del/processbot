@@ -9,4 +9,4 @@ services:
       - key: OPENROUTER_API_KEY
         sync: false
       - key: OPENROUTER_MODEL
-        value: openrouter/free
+        value: meta-llama/llama-3.3-70b-instruct:free
