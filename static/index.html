@@ -1,3 +1,4 @@
+```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -681,14 +682,23 @@
   function pickVoice(persona) {
     if (!voicesCache.length) voicesCache = speechSynthesis.getVoices();
     const female = persona && persona.id === "sakshi";
+
+    // Priority: Hindi (India) voices first, then Indian English, then any English.
+    const hiVoices = voicesCache.filter((v) => v.lang && v.lang.toLowerCase().startsWith("hi"));
+    const enInVoices = voicesCache.filter((v) => v.lang && v.lang.toLowerCase() === "en-in");
     const enVoices = voicesCache.filter((v) => v.lang && v.lang.toLowerCase().startsWith("en"));
-    const pool = enVoices.length ? enVoices : voicesCache;
-    const match = pool.find((v) =>
-      female
-        ? /female|zira|samantha|google uk english female|priya/i.test(v.name)
-        : /male|david|google uk english male|ravi/i.test(v.name)
-    );
-    return match || pool[0] || null;
+
+    const femaleRe = /female|zira|samantha|priya|heera|swara|google हिन्दी|google हिंदी/i;
+    const maleRe = /male|david|ravi|google.*hindi.*male|hemant/i;
+    const genderRe = female ? femaleRe : maleRe;
+
+    for (const pool of [hiVoices, enInVoices, enVoices, voicesCache]) {
+      if (!pool.length) continue;
+      const match = pool.find((v) => genderRe.test(v.name));
+      if (match) return match;
+    }
+    // No gender match anywhere — fall back to best available accent tier.
+    return hiVoices[0] || enInVoices[0] || enVoices[0] || voicesCache[0] || null;
   }
 
   function speak(text) {
@@ -696,9 +706,16 @@
     speechSynthesis.cancel();
     const utter = new SpeechSynthesisUtterance(text);
     const voice = pickVoice(currentPersona);
-    if (voice) utter.voice = voice;
-    utter.rate = 1;
-    utter.pitch = currentPersona && currentPersona.id === "sakshi" ? 1.15 : 1;
+    if (voice) {
+      utter.voice = voice;
+      utter.lang = voice.lang;
+    } else {
+      utter.lang = "hi-IN";
+    }
+    // Tuned for a natural Indian conversational feel — not robotic-slow, not rushed.
+    utter.rate = 0.93;
+    utter.pitch = currentPersona && currentPersona.id === "sakshi" ? 1.12 : 0.95;
+    utter.volume = 1;
     voiceStatus.textContent = `${currentPersona.name} is speaking...`;
     utter.onend = () => {
       if (callActive) voiceStatus.textContent = "Listening...";
@@ -710,6 +727,7 @@
     // recognition never stopped — it's already listening in the background,
     // which is what lets barge-in interrupt her mid-sentence.
   }
+
 
   // End the call automatically when leaving a chat
   backBtn.addEventListener("click", () => {
@@ -737,3 +755,4 @@
 
 </body>
 </html>
+```
