@@ -334,6 +334,39 @@
   }
   #sendBtn:active { transform: scale(0.95); }
   #sendBtn:disabled { opacity: 0.5; cursor: default; transform: none; }
+
+  /* ---- Voice controls ---- */
+  .voiceBtn {
+    background: white;
+    border: 1px solid #e5c9d8;
+    color: #d94a90;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.12s, background 0.2s, box-shadow 0.2s;
+  }
+  .voiceBtn:active { transform: scale(0.93); }
+  .voiceBtn.on {
+    background: linear-gradient(120deg, #e35a9c, #d94a90);
+    color: white;
+    box-shadow: 0 3px 10px rgba(217,74,144,0.35);
+  }
+  #voiceModeBtn.on {
+    animation: pulseDot 1.6s ease-in-out infinite;
+  }
+  #voiceStatus {
+    text-align: center;
+    font-size: 12px;
+    color: #b04a80;
+    padding: 4px 0 0;
+    min-height: 16px;
+  }
 </style>
 </head>
 <body>
@@ -360,7 +393,9 @@
 
 <div id="chatScreen">
   <div id="chat"></div>
+  <div id="voiceStatus"></div>
   <div id="inputBar">
+    <button id="voiceModeBtn" class="voiceBtn" title="Start voice call">📞</button>
     <input id="msgInput" type="text" placeholder="Type a message..." autocomplete="off" />
     <button id="sendBtn">Send</button>
   </div>
@@ -526,6 +561,7 @@
         return;
       }
       addBubble(data.reply, "bot");
+      if (callActive) speak(data.reply);
     } catch (err) {
       typingEl.remove();
       addBubble("Couldn't reach the server — check your connection and try again.", "bot");
@@ -538,6 +574,146 @@
   sendBtn.addEventListener("click", sendMessage);
   inputEl.addEventListener("keydown", (e) => {
     if (e.key === "Enter") sendMessage();
+  });
+
+  // ---- Voice call (continuous STT + TTS, automatic turn-taking, barge-in) ----
+  const voiceModeBtn = document.getElementById("voiceModeBtn");
+  const voiceStatus = document.getElementById("voiceStatus");
+
+  const SpeechRecognitionAPI = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const speechSupported = !!SpeechRecognitionAPI && "speechSynthesis" in window;
+
+  let recognition = null;
+  let recognitionRunning = false;
+  let callActive = false;      // true from "start call" tap until "end call" tap
+  let restartTimer = null;
+  let voicesCache = [];
+
+  if (!speechSupported) {
+    voiceModeBtn.style.display = "none";
+  } else {
+    recognition = new SpeechRecognitionAPI();
+    recognition.lang = "en-IN"; // handles Hinglish code-switching reasonably well
+    recognition.interimResults = true;
+    recognition.continuous = true; // keep the mic open for the whole call
+
+    recognition.onstart = () => { recognitionRunning = true; };
+
+    recognition.onresult = (event) => {
+      let interim = "";
+      let final = "";
+      for (let i = event.resultIndex; i < event.results.length; i++) {
+        const r = event.results[i];
+        if (r.isFinal) final += r[0].transcript;
+        else interim += r[0].transcript;
+      }
+      const live = (final + interim).trim();
+
+      // Barge-in: if she's talking and real speech shows up, cut her off immediately.
+      if (live.length > 2 && speechSynthesis.speaking) {
+        speechSynthesis.cancel();
+        voiceStatus.textContent = "Listening...";
+      }
+
+      if (live) inputEl.value = live;
+
+      if (final.trim()) {
+        inputEl.value = final.trim();
+        sendMessage(); // recognition keeps running underneath — no button needed
+      }
+    };
+
+    recognition.onerror = (event) => {
+      recognitionRunning = false;
+      // "no-speech" / "aborted" happen constantly in continuous mode — just keep the call alive
+      if (callActive && event.error !== "not-allowed") {
+        scheduleRestart();
+      } else if (event.error === "not-allowed") {
+        voiceStatus.textContent = "Mic permission blocked — allow mic access to use voice call.";
+        endCall();
+      }
+    };
+
+    recognition.onend = () => {
+      recognitionRunning = false;
+      if (callActive) scheduleRestart(); // browsers stop the session periodically; keep it alive
+    };
+  }
+
+  function scheduleRestart() {
+    clearTimeout(restartTimer);
+    restartTimer = setTimeout(() => {
+      if (callActive && !recognitionRunning) {
+        try { recognition.start(); } catch (e) {}
+      }
+    }, 250);
+  }
+
+  function startCall() {
+    if (!speechSupported || !currentPersona) return;
+    callActive = true;
+    voiceModeBtn.classList.add("on");
+    voiceModeBtn.textContent = "📴";
+    voiceStatus.textContent = "Call started — just talk.";
+    try { recognition.start(); } catch (e) {}
+  }
+
+  function endCall() {
+    callActive = false;
+    voiceModeBtn.classList.remove("on");
+    voiceModeBtn.textContent = "📞";
+    voiceStatus.textContent = "";
+    speechSynthesis.cancel();
+    clearTimeout(restartTimer);
+    if (recognitionRunning) recognition.stop();
+  }
+
+  voiceModeBtn.addEventListener("click", () => {
+    if (callActive) endCall();
+    else startCall();
+  });
+
+  if (speechSupported) {
+    speechSynthesis.onvoiceschanged = () => { voicesCache = speechSynthesis.getVoices(); };
+    voicesCache = speechSynthesis.getVoices();
+  }
+
+  function pickVoice(persona) {
+    if (!voicesCache.length) voicesCache = speechSynthesis.getVoices();
+    const female = persona && persona.id === "sakshi";
+    const enVoices = voicesCache.filter((v) => v.lang && v.lang.toLowerCase().startsWith("en"));
+    const pool = enVoices.length ? enVoices : voicesCache;
+    const match = pool.find((v) =>
+      female
+        ? /female|zira|samantha|google uk english female|priya/i.test(v.name)
+        : /male|david|google uk english male|ravi/i.test(v.name)
+    );
+    return match || pool[0] || null;
+  }
+
+  function speak(text) {
+    if (!speechSupported || !callActive) return;
+    speechSynthesis.cancel();
+    const utter = new SpeechSynthesisUtterance(text);
+    const voice = pickVoice(currentPersona);
+    if (voice) utter.voice = voice;
+    utter.rate = 1;
+    utter.pitch = currentPersona && currentPersona.id === "sakshi" ? 1.15 : 1;
+    voiceStatus.textContent = `${currentPersona.name} is speaking...`;
+    utter.onend = () => {
+      if (callActive) voiceStatus.textContent = "Listening...";
+    };
+    utter.onerror = () => {
+      if (callActive) voiceStatus.textContent = "Listening...";
+    };
+    speechSynthesis.speak(utter);
+    // recognition never stopped — it's already listening in the background,
+    // which is what lets barge-in interrupt her mid-sentence.
+  }
+
+  // End the call automatically when leaving a chat
+  backBtn.addEventListener("click", () => {
+    if (speechSupported) endCall();
   });
 
   // ---- Decorative floating background icons (purely visual, no app logic) ----
