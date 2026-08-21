@@ -1,4 +1,3 @@
-```html
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -555,17 +554,22 @@
       if (!res.ok) {
         const msg = (data && data.detail) || `Server error (${res.status}). Try again in a moment.`;
         addBubble(msg, "bot");
+        if (callActive) speak(msg);
         return;
       }
       if (!data || !data.reply) {
-        addBubble("No reply came back. Try again.", "bot");
+        const msg = "No reply came back. Try again.";
+        addBubble(msg, "bot");
+        if (callActive) speak(msg);
         return;
       }
       addBubble(data.reply, "bot");
       if (callActive) speak(data.reply);
     } catch (err) {
       typingEl.remove();
-      addBubble("Couldn't reach the server — check your connection and try again.", "bot");
+      const msg = "Couldn't reach the server — check your connection and try again.";
+      addBubble(msg, "bot");
+      if (callActive) speak(msg);
     } finally {
       sendBtn.disabled = false;
       inputEl.focus();
@@ -577,7 +581,7 @@
     if (e.key === "Enter") sendMessage();
   });
 
-  // ---- Voice call (continuous STT + TTS, automatic turn-taking, barge-in) ----
+  // ---- Voice call (strict turn-by-turn STT + TTS, one listen -> one reply) ----
   const voiceModeBtn = document.getElementById("voiceModeBtn");
   const voiceStatus = document.getElementById("voiceStatus");
 
@@ -586,7 +590,8 @@
 
   let recognition = null;
   let recognitionRunning = false;
-  let callActive = false;      // true from "start call" tap until "end call" tap
+  let callActive = false;   // true from "start call" tap until "end call" tap
+  let botTurn = false;      // true while waiting for reply / while she's speaking — mic ignored
   let restartTimer = null;
   let voicesCache = [];
 
@@ -596,48 +601,41 @@
     recognition = new SpeechRecognitionAPI();
     recognition.lang = "en-IN"; // handles Hinglish code-switching reasonably well
     recognition.interimResults = true;
-    recognition.continuous = true; // keep the mic open for the whole call
+    recognition.continuous = false; // one phrase per listen, then stop and wait for her turn
 
     recognition.onstart = () => { recognitionRunning = true; };
 
     recognition.onresult = (event) => {
-      let interim = "";
-      let final = "";
-      for (let i = event.resultIndex; i < event.results.length; i++) {
-        const r = event.results[i];
-        if (r.isFinal) final += r[0].transcript;
-        else interim += r[0].transcript;
+      if (botTurn) return; // her turn — ignore anything the mic picks up, never interrupt her
+      let transcript = "";
+      for (let i = 0; i < event.results.length; i++) {
+        transcript += event.results[i][0].transcript;
       }
-      const live = (final + interim).trim();
-
-      // Barge-in: if she's talking and real speech shows up, cut her off immediately.
-      if (live.length > 2 && speechSynthesis.speaking) {
-        speechSynthesis.cancel();
-        voiceStatus.textContent = "Listening...";
-      }
-
-      if (live) inputEl.value = live;
-
-      if (final.trim()) {
-        inputEl.value = final.trim();
-        sendMessage(); // recognition keeps running underneath — no button needed
+      inputEl.value = transcript;
+      const last = event.results[event.results.length - 1];
+      if (last.isFinal) {
+        recognition.stop();
+        if (transcript.trim()) {
+          botTurn = true; // switch to her turn the moment the command is captured
+          sendMessage();
+        }
       }
     };
 
     recognition.onerror = (event) => {
       recognitionRunning = false;
-      // "no-speech" / "aborted" happen constantly in continuous mode — just keep the call alive
-      if (callActive && event.error !== "not-allowed") {
-        scheduleRestart();
-      } else if (event.error === "not-allowed") {
+      if (event.error === "not-allowed") {
         voiceStatus.textContent = "Mic permission blocked — allow mic access to use voice call.";
         endCall();
+        return;
       }
+      // "no-speech" etc. — just let the call sit and listen again
+      if (callActive && !botTurn) scheduleRestart();
     };
 
     recognition.onend = () => {
       recognitionRunning = false;
-      if (callActive) scheduleRestart(); // browsers stop the session periodically; keep it alive
+      if (callActive && !botTurn) scheduleRestart(); // ready for the next single command
     };
   }
 
@@ -653,6 +651,7 @@
   function startCall() {
     if (!speechSupported || !currentPersona) return;
     callActive = true;
+    botTurn = false;
     voiceModeBtn.classList.add("on");
     voiceModeBtn.textContent = "📴";
     voiceStatus.textContent = "Call started — just talk.";
@@ -661,6 +660,7 @@
 
   function endCall() {
     callActive = false;
+    botTurn = false;
     voiceModeBtn.classList.remove("on");
     voiceModeBtn.textContent = "📞";
     voiceStatus.textContent = "";
@@ -702,8 +702,7 @@
   }
 
   function speak(text) {
-    if (!speechSupported || !callActive) return;
-    speechSynthesis.cancel();
+    if (!speechSupported || !callActive) { botTurn = false; return; }
     const utter = new SpeechSynthesisUtterance(text);
     const voice = pickVoice(currentPersona);
     if (voice) {
@@ -717,15 +716,17 @@
     utter.pitch = currentPersona && currentPersona.id === "sakshi" ? 1.12 : 0.95;
     utter.volume = 1;
     voiceStatus.textContent = `${currentPersona.name} is speaking...`;
-    utter.onend = () => {
-      if (callActive) voiceStatus.textContent = "Listening...";
+    const handOffTurn = () => {
+      botTurn = false;
+      if (callActive) {
+        voiceStatus.textContent = "Listening...";
+        try { recognition.start(); } catch (e) { scheduleRestart(); }
+      }
     };
-    utter.onerror = () => {
-      if (callActive) voiceStatus.textContent = "Listening...";
-    };
+    // She always finishes her full sentence — nothing cancels this utterance mid-way.
+    utter.onend = handOffTurn;
+    utter.onerror = handOffTurn;
     speechSynthesis.speak(utter);
-    // recognition never stopped — it's already listening in the background,
-    // which is what lets barge-in interrupt her mid-sentence.
   }
 
 
@@ -755,4 +756,3 @@
 
 </body>
 </html>
-```
